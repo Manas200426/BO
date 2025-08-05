@@ -1,11 +1,13 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLocation } from "react-router-dom";
 import StandardRow from "../components/ShotComponents/StandardRow";
 import ShotZeroRow from "../components/ShotComponents/ShotZeroRow";
 import ShotRow from "../components/ShotComponents/ShotRow";
+import TinterSelectionModal from "../components/ShotComponents/ShotTinterAddModal";
 import { shot_measurements } from "../Data/shots/shot_measurements";
 import { shots } from "../Data/shots/Shots";
 import { shot_tinters } from "../Data/shots/shot_tinters";
+import { skuVersionMeasurements } from "../Data/SkuMeasurementData";
 
 const ShotPageTable = () => {
   const location = useLocation();
@@ -39,6 +41,161 @@ const ShotPageTable = () => {
       .filter((st) => st.shot_id === shotId)
       .map((st) => st.tinter_batch_id);
 
+  // --- New shot state and modal logic ---
+  const [showModal, setShowModal] = useState(false);
+  const [modalShotIdx, setModalShotIdx] = useState(null);
+  const [newShots, setNewShots] = useState([]);
+  const [calInputs, setCalInputs] = useState({});
+  const [pendingTinters, setPendingTinters] = useState([]);
+
+  // Get next shot number
+  const nextShotNumber =
+    otherShots.length + newShots.length > 0
+      ? Math.max(
+          ...otherShots.map((s) => s.shot_number),
+          ...newShots.map((s) => s.shotNumber)
+        ) + 1
+      : 1;
+
+  // Get standard values for random generation
+  const getStandard = (type) =>
+    skuVersionMeasurements.find(
+      (m) => m.sku_version_id === skuVersionId && m.measurement_type === type
+    )?.measurement_value ?? 0;
+
+  // Generate random value within 10 of standard
+  const randomNear = (standard) =>
+    (standard + (Math.random() * 10 - 5)).toFixed(2);
+
+  // Add new shot row (incomplete)
+  const handleAddShot = () => {
+    setNewShots((prev) => [
+      ...prev,
+      {
+        shotNumber: nextShotNumber,
+        skuVersionId,
+        measurements: [],
+        comments: "",
+        tinterBatchIds: [],
+        status: "incomplete",
+        liquidFetched: false,
+        colorFetched: false,
+      },
+    ]);
+  };
+
+  // Open tinter modal for a specific new shot row
+  const handleSelectTinter = (idx) => {
+    setModalShotIdx(idx);
+    setShowModal(true);
+  };
+
+  // Save selected tinters to the new shot row
+  const handleSaveTinters = (selectedTinters) => {
+    setShowModal(false);
+    setNewShots((prev) =>
+      prev.map((shot, idx) =>
+        idx === modalShotIdx
+          ? {
+              ...shot,
+              tinterBatchIds: selectedTinters.map((t) => t.tinter_id),
+            }
+          : shot
+      )
+    );
+    setModalShotIdx(null);
+  };
+
+  // Fetch liquid/panel values for a new shot row
+  const handleFetchLiquid = (idx) => {
+    setNewShots((prev) =>
+      prev.map((shot, i) =>
+        i === idx
+          ? {
+              ...shot,
+              measurements: [
+                {
+                  measurement_type: "liquid_l",
+                  measurement_value: Number(
+                    randomNear(getStandard("liquid_l"))
+                  ),
+                },
+                {
+                  measurement_type: "liquid_a",
+                  measurement_value: Number(
+                    randomNear(getStandard("liquid_a"))
+                  ),
+                },
+                {
+                  measurement_type: "liquid_b",
+                  measurement_value: Number(
+                    randomNear(getStandard("liquid_b"))
+                  ),
+                },
+                {
+                  measurement_type: "panel_l",
+                  measurement_value: Number(randomNear(getStandard("panel_l"))),
+                },
+                {
+                  measurement_type: "panel_a",
+                  measurement_value: Number(randomNear(getStandard("panel_a"))),
+                },
+                {
+                  measurement_type: "panel_b",
+                  measurement_value: Number(randomNear(getStandard("panel_b"))),
+                },
+              ],
+              liquidFetched: true,
+            }
+          : shot
+      )
+    );
+  };
+
+  // Handle calorimeter input change
+  const handleCalInputChange = (idx, field, value) => {
+    setCalInputs((prev) => ({
+      ...prev,
+      [idx]: { ...prev[idx], [field]: value },
+    }));
+  };
+
+  // Fetch colorimeter values for a new shot row
+  const handleFetchColor = (idx) => {
+    const cal = calInputs[idx] || {};
+    if (cal.l === undefined || cal.a === undefined || cal.b === undefined) {
+      alert("Please enter all L, a, b values.");
+      return;
+    }
+    setNewShots((prev) =>
+      prev.map((shot, i) =>
+        i === idx
+          ? {
+              ...shot,
+              measurements: [
+                ...(shot.measurements || []),
+                {
+                  measurement_type: "delta_colorimeter_l",
+                  measurement_value: Number(cal.l),
+                },
+                {
+                  measurement_type: "delta_colorimeter_a",
+                  measurement_value: Number(cal.a),
+                },
+                {
+                  measurement_type: "delta_colorimeter_b",
+                  measurement_value: Number(cal.b),
+                },
+              ],
+              colorFetched: true,
+              status: "complete",
+              comments: "User added shot",
+            }
+          : shot
+      )
+    );
+  };
+
   return (
     <div className="p-4">
       <h2 className="text-xl font-semibold mb-4">
@@ -49,13 +206,37 @@ const ShotPageTable = () => {
       <table className="w-full border border-gray-300 text-sm">
         <thead className="bg-gray-100">
           <tr>
-            <th className="border p-2">Sample</th>
-            <th className="border p-2">Tinter Added</th>
-            <th className="border p-2">Liquid Color (L, a, b)</th>
-            <th className="border p-2">Panel Color (L, a, b)</th>
-            <th className="border p-2">Colorimeter Color (L, a, b)</th>
-            <th className="border p-2">Liquid dE</th>
+            <th className="border p-2">#</th>
+            <th className="border p-2">Tinters</th>
+            <th className="border p-2" colSpan={4}>
+              Liquid Color
+            </th>
+            <th className="border p-2" colSpan={4}>
+              Panel Color
+            </th>
+            <th className="border p-2" colSpan={4}>
+              Colorimeter
+            </th>
             <th className="border p-2">Comments</th>
+            <th className="border p-2">Actions</th>
+          </tr>
+          <tr>
+            <th />
+            <th />
+            <th className="border p-2">L</th>
+            <th className="border p-2">A</th>
+            <th className="border p-2">B</th>
+            <th className="border p-2">ΔE</th>
+            <th className="border p-2">L</th>
+            <th className="border p-2">A</th>
+            <th className="border p-2">B</th>
+            <th className="border p-2">ΔE</th>
+            <th className="border p-2">L</th>
+            <th className="border p-2">A</th>
+            <th className="border p-2">B</th>
+            <th className="border p-2">ΔE</th>
+            <th />
+            <th />
           </tr>
         </thead>
         <tbody>
@@ -73,6 +254,47 @@ const ShotPageTable = () => {
               measurements={getShotMeasurements(shot.shot_id)}
               comments={shot.comments}
               tinterBatchIds={getShotTinterBatchIds(shot.shot_id)}
+              actionCell={<span className="text-green-600">Shot Ended</span>}
+            />
+          ))}
+          {newShots.map((shot, idx) => (
+            <ShotRow
+              key={`new-${idx}`}
+              shotNumber={shot.shotNumber}
+              skuVersionId={skuVersionId}
+              measurements={shot.measurements}
+              comments={shot.comments}
+              tinterBatchIds={shot.tinterBatchIds}
+              isNew={true}
+              calInputs={calInputs[idx] || {}}
+              onCalInputChange={(field, value) =>
+                handleCalInputChange(idx, field, value)
+              }
+              onCalculateDeltaE={() => handleFetchColor(idx)}
+              colorInputsDisabled={!shot.liquidFetched || shot.colorFetched}
+              actionCell={
+                shot.status === "complete" ? (
+                  <span className="text-green-600">Shot Ended</span>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <button
+                      className="bg-blue-500 text-white px-2 py-1 rounded text-xs"
+                      onClick={() => handleSelectTinter(idx)}
+                    >
+                      {shot.tinterBatchIds.length > 0
+                        ? "Edit Tinters"
+                        : "Select Tinter"}
+                    </button>
+                    <button
+                      className="bg-yellow-500 text-white px-2 py-1 rounded text-xs"
+                      onClick={() => handleFetchLiquid(idx)}
+                      disabled={shot.liquidFetched}
+                    >
+                      Fetch Liquid
+                    </button>
+                  </div>
+                )
+              }
             />
           ))}
         </tbody>
@@ -87,6 +309,13 @@ const ShotPageTable = () => {
           </button>
         </div>
       )}
+      <TinterSelectionModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSave={handleSaveTinters}
+        plantId={plantId}
+        allowedTinterIds={[]} // You can set allowed tinter IDs as needed
+      />
     </div>
   );
 };
