@@ -1,14 +1,7 @@
 import React from "react";
 import { skuVersionMeasurements } from "../../Data/SkuMeasurementData";
-import { tinters } from "../../Data/TinterData";
 
-const ShotRow = ({
-  shotNumber,
-  skuVersionId,
-  measurements,
-  comments,
-  tinterBatchIds,
-}) => {
+const ShotZeroRow = ({ skuVersionId, measurements, comments }) => {
   // Helper to get measured value
   const getMeasured = (type) =>
     measurements.find((m) => m.measurement_type === type)?.measurement_value ??
@@ -42,7 +35,7 @@ const ShotRow = ({
   const panelA = delta(getMeasured("panel_a"), getStandard("panel_a"));
   const panelB = delta(getMeasured("panel_b"), getStandard("panel_b"));
 
-  // Colorimeter
+  // Colorimeter (note: your measurements use "delta_colorimeter_*" as type)
   const colorL = deltaColor(
     getMeasured("delta_colorimeter_l"),
     getStandard("colorimeter_l")
@@ -59,24 +52,10 @@ const ShotRow = ({
   // dE (just show measured value)
   const deltaE = getMeasured("target_delta_e");
 
-  // Get tinter codes for this shot
-  const tinterCodes = tinterBatchIds.map((tbid, idx) => {
-    const tinter = tinters.find((t) => t.tinter_id === tbid);
-    return tinter ? tinter.tinter_code : `Unknown (${tbid})`;
-  });
-
   return (
-    <tr>
-      <td className="border p-2 font-semibold">Shot {shotNumber}</td>
-      <td className="border p-2 text-center">
-        <ul className="list-disc list-inside text-xs">
-          {tinterCodes.length > 0 ? (
-            tinterCodes.map((t, idx) => <li key={idx}>{t}</li>)
-          ) : (
-            <li>-</li>
-          )}
-        </ul>
-      </td>
+    <tr className="bg-blue-50">
+      <td className="border p-2 font-semibold">Shot 0</td>
+      <td className="border p-2 text-center">-</td>
       <td className="border p-2 text-center">
         {liquidL}, {liquidA}, {liquidB}
       </td>
@@ -92,4 +71,4 @@ const ShotRow = ({
   );
 };
 
-export default ShotRow;
+export default ShotZeroRow;
